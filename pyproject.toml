@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pypublish"
+name = "pypublish-cli"
 dynamic = ["version"]
 description = "A CLI tool for publishing Python packages to PyPI"
 readme = "README.md"

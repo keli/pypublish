@@ -1,11 +1,11 @@
-# pypublish
+# pypublish-cli
 
 A CLI tool for publishing Python packages to PyPI.
 
 ## Installation
 
 ```bash
-pip install pypublish
+pip install pypublish-cli
 ```
 
 ## Usage
