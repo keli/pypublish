@@ -82,6 +82,36 @@ def upload_package():
 
     print("Successfully uploaded package to PyPI")
 
+def init_github_repo(repo_name=None, private=False):
+    """Initialize git repo and create GitHub repository"""
+    import os
+
+    # Get repo name from current directory if not provided
+    if repo_name is None:
+        repo_name = os.path.basename(os.getcwd())
+
+    # Check if git repo exists
+    try:
+        subprocess.run(['git', 'status'], capture_output=True, check=True)
+        print("Git repository already exists")
+    except subprocess.CalledProcessError:
+        # Initialize git repo
+        print("Initializing git repository...")
+        run_command('git init')
+        run_command('git add .')
+        run_command('git commit -m "Initial commit"')
+
+    # Create GitHub repo and push
+    visibility = '--private' if private else '--public'
+    command = f'gh repo create {repo_name} {visibility} --source=. --remote=origin --push'
+    print(f"Executing: {command}")
+    try:
+        run_command(command)
+        print(f"Successfully created GitHub repository: {repo_name}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error creating GitHub repository: {e}")
+        sys.exit(1)
+
 def publish_version(version, tag_only=False, build_only=False, no_build=False, no_upload=False):
     """Publish a new version with configurable steps"""
     if not version.startswith('v'):
@@ -110,6 +140,9 @@ def main():
         description='Publish or delete package versions',
         epilog='''
 Examples:
+  %(prog)s --init-repo              # Initialize git and create GitHub repo
+  %(prog)s --init-repo myproject    # Initialize with custom repo name
+  %(prog)s --init-repo --private    # Create private GitHub repo
   %(prog)s 0.2.0                    # Full publish: tag, build, upload
   %(prog)s v0.2.0                   # Full publish: tag, build, upload
   %(prog)s 0.2.0 --tag-only         # Only create and push tag
@@ -121,7 +154,11 @@ Examples:
         ''',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument('version', help='Version number (e.g., 0.2.0 or v0.2.0)')
+    parser.add_argument('version', nargs='?', help='Version number (e.g., 0.2.0 or v0.2.0) or repo name for --init-repo')
+    parser.add_argument('--init-repo', action='store_true',
+                        help='Initialize git repo and create GitHub repository')
+    parser.add_argument('--private', action='store_true',
+                        help='Create private GitHub repository (use with --init-repo)')
     parser.add_argument('--delete-tag', action='store_true',
                         help='Delete the tag locally and from origin instead of publishing')
     parser.add_argument('--tag-only', action='store_true',
@@ -135,9 +172,15 @@ Examples:
 
     args = parser.parse_args()
 
-    if args.delete_tag:
+    if args.init_repo:
+        init_github_repo(repo_name=args.version, private=args.private)
+    elif args.delete_tag:
+        if not args.version:
+            parser.error('version is required for --delete-tag')
         delete_tag(args.version)
     else:
+        if not args.version:
+            parser.error('version is required')
         publish_version(
             args.version,
             tag_only=args.tag_only,

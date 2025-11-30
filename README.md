@@ -10,6 +10,20 @@ pip install pypublish-cli
 
 ## Usage
 
+### Initialize GitHub repository
+
+```bash
+pypublish --init-repo              # Use current directory name as repo name
+pypublish --init-repo myproject    # Specify custom repo name
+pypublish --init-repo --private    # Create private repository
+```
+
+This will:
+1. Initialize git repository (if not already initialized)
+2. Add all files and create initial commit
+3. Create GitHub repository using `gh` CLI
+4. Push to GitHub
+
 ### Full publish workflow
 
 ```bash
