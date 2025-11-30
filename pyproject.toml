@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pypublish"
+dynamic = ["version"]
+description = "A CLI tool for publishing Python packages to PyPI"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "MIT"}
+authors = [
+    {name = "Keli Hu", email = "dev@keli.hu"}
+]
+dependencies = [
+    "build",
+    "twine"
+]
+
+[project.scripts]
+pypublish = "pypublish:main"
+
+[tool.setuptools_scm]
+local_scheme = 'no-local-version'
+version_scheme = "post-release"
+
+[tool.setuptools.dynamic]
+version = { attr = "setuptools_scm.get_version" }
