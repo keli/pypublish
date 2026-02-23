@@ -10,17 +10,21 @@ pip install pypublish-cli
 
 ## Usage
 
-### Initialize GitHub repository
+### Initialize repository
 
 ```bash
-pypublish --init-repo              # Use current directory name as repo name
-pypublish --init-repo myproject    # Specify custom repo name
-pypublish --init-repo --private    # Create private repository
+pypublish --init-repo              # Initialize local git repo only
+pypublish --init-repo --github     # Initialize git and create GitHub repo
+pypublish --init-repo --github myproject  # Specify custom repo name
+pypublish --init-repo --github --private  # Create private GitHub repo
+pypublish --github                 # Create GitHub repo (git already initialized)
 ```
 
-This will:
+`--init-repo` will:
 1. Initialize git repository (if not already initialized)
 2. Add all files and create initial commit
+
+`--github` additionally:
 3. Create GitHub repository using `gh` CLI
 4. Push to GitHub
 
@@ -32,11 +36,11 @@ pypublish v0.2.0             # Full publish: tag, build, upload
 ```
 
 This will:
-1. Create a git tag
-2. Push the tag to origin
+1. Validate the environment (pyproject.toml, build tools)
+2. Create a git tag and push to origin
 3. Clean up old build artifacts
 4. Build the package using `python -m build`
-5. Upload to PyPI using `twine`
+5. Upload to PyPI using `uv publish` (if available) or `twine upload`
 
 ### Partial workflows
 
@@ -54,13 +58,12 @@ pypublish --delete-tag 0.2.0       # Delete tag locally and from origin
 pypublish --delete-tag v0.2.0      # Delete tag locally and from origin
 ```
 
-This will remove the tag both locally and from the remote repository.
-
 ## Requirements
 
 - Python >= 3.7
-- Git repository
-- PyPI account configured with `twine`
+- `build` (`pip install build`)
+- `uv` or `twine` for uploading (`pip install twine`)
+- `gh` CLI for GitHub repository creation
 
 ## License
 
