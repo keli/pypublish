@@ -10,6 +10,12 @@ pip install pypublish-cli
 
 ## Usage
 
+### Initialize pyproject.toml
+
+```bash
+pypublish --init-pyproject    # Add setuptools_scm config to pyproject.toml (creates it if missing)
+```
+
 ### Initialize repository
 
 ```bash

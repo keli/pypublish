@@ -126,6 +126,86 @@ def create_github_repo(repo_name=None, private=False):
         print(f"Error creating GitHub repository: {e}")
         sys.exit(1)
 
+PYPROJECT_TEMPLATE = '''\
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{name}"
+dynamic = ["version"]
+description = ""
+readme = "README.md"
+requires-python = ">=3.8"
+license = {{text = "MIT"}}
+dependencies = []
+
+[tool.setuptools_scm]
+local_scheme = "no-local-version"
+version_scheme = "post-release"
+'''
+
+SCM_BUILD_SYSTEM = '''\
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+'''
+
+SCM_TOOL_CONFIG = '''\
+[tool.setuptools_scm]
+local_scheme = "no-local-version"
+version_scheme = "post-release"
+'''
+
+def init_pyproject():
+    """Add setuptools_scm config to pyproject.toml, or create it from template"""
+    if not os.path.exists('pyproject.toml'):
+        name = os.path.basename(os.getcwd())
+        with open('pyproject.toml', 'w') as f:
+            f.write(PYPROJECT_TEMPLATE.format(name=name))
+        print("Created pyproject.toml")
+        return
+
+    with open('pyproject.toml', 'r') as f:
+        content = f.read()
+
+    changed = False
+
+    if 'setuptools_scm' not in content:
+        if '[build-system]' in content:
+            # Patch existing [build-system] requires line
+            lines = content.splitlines(keepends=True)
+            new_lines = []
+            for line in lines:
+                new_lines.append(line)
+                if line.strip().startswith('requires') and 'setuptools_scm' not in line:
+                    # Insert setuptools_scm into requires if it's a list
+                    if '"setuptools_scm' not in line and "'setuptools_scm" not in line:
+                        new_lines[-1] = line.rstrip()
+                        if line.rstrip().endswith(']'):
+                            new_lines[-1] = line.rstrip()[:-1] + ', "setuptools_scm[toml]>=6.2"]\n'
+                        else:
+                            new_lines[-1] = line  # multi-line, skip for now
+            content = ''.join(new_lines)
+        else:
+            content += '\n' + SCM_BUILD_SYSTEM
+        changed = True
+
+    if 'dynamic' not in content:
+        content = content.replace('[project]', '[project]\ndynamic = ["version"]', 1)
+        changed = True
+
+    if '[tool.setuptools_scm]' not in content:
+        content += '\n' + SCM_TOOL_CONFIG
+        changed = True
+
+    if changed:
+        with open('pyproject.toml', 'w') as f:
+            f.write(content)
+        print("Updated pyproject.toml with setuptools_scm configuration")
+    else:
+        print("pyproject.toml already has setuptools_scm configuration")
+
 def check_publish_environment():
     """Check that the environment is ready for publishing"""
     errors = []
@@ -196,6 +276,7 @@ def main():
         description='Publish or delete package versions',
         epilog='''
 Examples:
+  %(prog)s --init-pyproject         # Add setuptools_scm config to pyproject.toml
   %(prog)s --init-repo              # Initialize local git repo
   %(prog)s --init-repo --github     # Initialize git and create GitHub repo
   %(prog)s --init-repo --github myproject  # Initialize with custom repo name
@@ -213,6 +294,8 @@ Examples:
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument('version', nargs='?', help='Version number (e.g., 0.2.0 or v0.2.0) or repo name for --init-repo')
+    parser.add_argument('--init-pyproject', action='store_true',
+                        help='Add setuptools_scm config to pyproject.toml (creates it if missing)')
     parser.add_argument('--init-repo', action='store_true',
                         help='Initialize local git repository')
     parser.add_argument('--github', action='store_true',
@@ -232,7 +315,9 @@ Examples:
 
     args = parser.parse_args()
 
-    if args.init_repo:
+    if args.init_pyproject:
+        init_pyproject()
+    elif args.init_repo:
         init_repo()
         if args.github:
             create_github_repo(repo_name=args.version, private=args.private)
