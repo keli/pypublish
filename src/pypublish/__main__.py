@@ -134,7 +134,7 @@ def create_github_repo(repo_name=None, private=False):
 
 PYPROJECT_TEMPLATE = '''\
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=77", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -143,7 +143,7 @@ dynamic = ["version"]
 description = ""
 readme = "README.md"
 requires-python = ">=3.8"
-license = {{text = "MIT"}}
+license = "MIT"
 dependencies = []
 
 [tool.setuptools_scm]
@@ -153,7 +153,7 @@ version_scheme = "post-release"
 
 SCM_BUILD_SYSTEM = '''\
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=77", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 '''
 
