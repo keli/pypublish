@@ -70,13 +70,13 @@ def build_package(env=None):
     print("Successfully built package")
 
 def detect_upload_tool():
-    """Detect available upload tool, preferring uv"""
-    has_uv = subprocess.run('uv --version', shell=True, capture_output=True).returncode == 0
+    """Detect available upload tool, preferring twine"""
     has_twine = subprocess.run('twine --version', shell=True, capture_output=True).returncode == 0
-    if has_uv:
-        return 'uv'
+    has_uv = subprocess.run('uv --version', shell=True, capture_output=True).returncode == 0
     if has_twine:
         return 'twine'
+    if has_uv:
+        return 'uv'
     return None
 
 def upload_package():
