@@ -51,7 +51,7 @@ def create_tag(version):
 
     print(f"Successfully created and pushed tag {version}")
 
-def build_package():
+def build_package(env=None):
     """Build the package"""
     commands = [
         'rm -rf dist/ build/ *.egg-info',
@@ -61,7 +61,7 @@ def build_package():
     for command in commands:
         print(f"Executing: {command}")
         try:
-            run_command(command)
+            subprocess.run(command, shell=True, check=True, env=env)
         except subprocess.CalledProcessError as e:
             print(f"Error executing command: {command}")
             print(f"Error: {e}")
@@ -69,9 +69,27 @@ def build_package():
 
     print("Successfully built package")
 
+def detect_upload_tool():
+    """Detect available upload tool, preferring uv"""
+    has_uv = subprocess.run('uv --version', shell=True, capture_output=True).returncode == 0
+    has_twine = subprocess.run('twine --version', shell=True, capture_output=True).returncode == 0
+    if has_uv:
+        return 'uv'
+    if has_twine:
+        return 'twine'
+    return None
+
 def upload_package():
     """Upload the package to PyPI"""
-    command = 'twine upload dist/*'
+    tool = detect_upload_tool()
+    if tool == 'uv':
+        command = 'uv publish dist/*'
+    elif tool == 'twine':
+        command = 'twine upload dist/*'
+    else:
+        print("Error: neither 'uv' nor 'twine' is installed (run: pip install twine)")
+        sys.exit(1)
+
     print(f"Executing: {command}")
     try:
         run_command(command)
@@ -82,26 +100,22 @@ def upload_package():
 
     print("Successfully uploaded package to PyPI")
 
-def init_github_repo(repo_name=None, private=False):
-    """Initialize git repo and create GitHub repository"""
-    import os
-
-    # Get repo name from current directory if not provided
-    if repo_name is None:
-        repo_name = os.path.basename(os.getcwd())
-
-    # Check if git repo exists
+def init_repo():
+    """Initialize local git repository"""
     try:
         subprocess.run(['git', 'status'], capture_output=True, check=True)
         print("Git repository already exists")
     except subprocess.CalledProcessError:
-        # Initialize git repo
         print("Initializing git repository...")
         run_command('git init')
         run_command('git add .')
         run_command('git commit -m "Initial commit"')
 
-    # Create GitHub repo and push
+def create_github_repo(repo_name=None, private=False):
+    """Create GitHub repository and push"""
+    if repo_name is None:
+        repo_name = os.path.basename(os.getcwd())
+
     visibility = '--private' if private else '--public'
     command = f'gh repo create {repo_name} {visibility} --source=. --remote=origin --push'
     print(f"Executing: {command}")
@@ -112,10 +126,47 @@ def init_github_repo(repo_name=None, private=False):
         print(f"Error creating GitHub repository: {e}")
         sys.exit(1)
 
+def check_publish_environment():
+    """Check that the environment is ready for publishing"""
+    errors = []
+
+    # Check pyproject.toml exists
+    if not os.path.exists('pyproject.toml'):
+        errors.append("pyproject.toml not found")
+    else:
+        content = open('pyproject.toml').read()
+        if 'setuptools_scm' not in content:
+            errors.append("pyproject.toml does not use setuptools_scm for versioning")
+
+    # Check build is installed
+    result = subprocess.run('python -m build --version', shell=True, capture_output=True)
+    if result.returncode != 0:
+        errors.append("'build' is not installed (run: pip install build)")
+
+    # Check uv or twine is available for upload
+    if detect_upload_tool() is None:
+        errors.append("neither 'uv' nor 'twine' is installed (run: pip install twine)")
+
+    if errors:
+        for err in errors:
+            print(f"Error: {err}")
+        sys.exit(1)
+
+def has_git_tags():
+    """Return True if the repo has at least one tag"""
+    result = subprocess.run('git tag', shell=True, capture_output=True, text=True)
+    return bool(result.stdout.strip())
+
 def publish_version(version, tag_only=False, build_only=False, no_build=False, no_upload=False):
     """Publish a new version with configurable steps"""
     if not version.startswith('v'):
         version = f'v{version}'
+
+    if not no_build:
+        check_publish_environment()
+
+    # Check for existing tags before creating new one
+    first_publish = not no_build and not has_git_tags()
 
     # Create and push tag
     create_tag(version)
@@ -125,7 +176,12 @@ def publish_version(version, tag_only=False, build_only=False, no_build=False, n
 
     # Build package
     if not no_build:
-        build_package()
+        env = os.environ.copy()
+        if first_publish:
+            bare_version = version.lstrip('v')
+            print(f"No existing tags found, setting SETUPTOOLS_SCM_PRETEND_VERSION={bare_version}")
+            env['SETUPTOOLS_SCM_PRETEND_VERSION'] = bare_version
+        build_package(env=env)
 
     if build_only or no_upload:
         return
@@ -140,9 +196,11 @@ def main():
         description='Publish or delete package versions',
         epilog='''
 Examples:
-  %(prog)s --init-repo              # Initialize git and create GitHub repo
-  %(prog)s --init-repo myproject    # Initialize with custom repo name
-  %(prog)s --init-repo --private    # Create private GitHub repo
+  %(prog)s --init-repo              # Initialize local git repo
+  %(prog)s --init-repo --github     # Initialize git and create GitHub repo
+  %(prog)s --init-repo --github myproject  # Initialize with custom repo name
+  %(prog)s --github                 # Create GitHub repo (git already initialized)
+  %(prog)s --github --private       # Create private GitHub repo
   %(prog)s 0.2.0                    # Full publish: tag, build, upload
   %(prog)s v0.2.0                   # Full publish: tag, build, upload
   %(prog)s 0.2.0 --tag-only         # Only create and push tag
@@ -156,9 +214,11 @@ Examples:
     )
     parser.add_argument('version', nargs='?', help='Version number (e.g., 0.2.0 or v0.2.0) or repo name for --init-repo')
     parser.add_argument('--init-repo', action='store_true',
-                        help='Initialize git repo and create GitHub repository')
+                        help='Initialize local git repository')
+    parser.add_argument('--github', action='store_true',
+                        help='Create GitHub repository and push (use with --init-repo)')
     parser.add_argument('--private', action='store_true',
-                        help='Create private GitHub repository (use with --init-repo)')
+                        help='Create private GitHub repository (use with --github)')
     parser.add_argument('--delete-tag', action='store_true',
                         help='Delete the tag locally and from origin instead of publishing')
     parser.add_argument('--tag-only', action='store_true',
@@ -173,7 +233,11 @@ Examples:
     args = parser.parse_args()
 
     if args.init_repo:
-        init_github_repo(repo_name=args.version, private=args.private)
+        init_repo()
+        if args.github:
+            create_github_repo(repo_name=args.version, private=args.private)
+    elif args.github:
+        create_github_repo(repo_name=args.version, private=args.private)
     elif args.delete_tag:
         if not args.version:
             parser.error('version is required for --delete-tag')

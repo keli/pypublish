@@ -13,8 +13,7 @@ authors = [
     {name = "Keli Hu", email = "dev@keli.hu"}
 ]
 dependencies = [
-    "build",
-    "twine"
+    "build"
 ]
 
 [project.scripts]
