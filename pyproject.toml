@@ -7,13 +7,14 @@ name = "pypublish-cli"
 dynamic = ["version"]
 description = "A CLI tool for publishing Python packages to PyPI"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
     {name = "Keli Hu", email = "dev@keli.hu"}
 ]
 dependencies = [
-    "build"
+    "build",
+    "tomli>=2.0; python_version < '3.11'"
 ]
 
 [project.scripts]

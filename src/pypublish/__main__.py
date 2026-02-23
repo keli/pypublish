@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 import os
 import sys
+import re
 import subprocess
 import argparse
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 def run_command(command):
     """Execute a shell command and return the exit code"""
@@ -166,36 +172,50 @@ def init_pyproject():
         print("Created pyproject.toml")
         return
 
+    with open('pyproject.toml', 'rb') as f:
+        data = tomllib.load(f)
     with open('pyproject.toml', 'r') as f:
         content = f.read()
 
     changed = False
 
-    if 'setuptools_scm' not in content:
+    # Add setuptools_scm to [build-system] requires
+    build_requires = data.get('build-system', {}).get('requires', [])
+    has_scm = any('setuptools_scm' in r for r in build_requires)
+    if not has_scm:
         if '[build-system]' in content:
-            # Patch existing [build-system] requires line
-            lines = content.splitlines(keepends=True)
-            new_lines = []
-            for line in lines:
-                new_lines.append(line)
-                if line.strip().startswith('requires') and 'setuptools_scm' not in line:
-                    # Insert setuptools_scm into requires if it's a list
-                    if '"setuptools_scm' not in line and "'setuptools_scm" not in line:
-                        new_lines[-1] = line.rstrip()
-                        if line.rstrip().endswith(']'):
-                            new_lines[-1] = line.rstrip()[:-1] + ', "setuptools_scm[toml]>=6.2"]\n'
-                        else:
-                            new_lines[-1] = line  # multi-line, skip for now
-            content = ''.join(new_lines)
+            # Patch the requires = [...] line (single-line only)
+            def add_scm_to_requires(m):
+                inner = m.group(1).rstrip()
+                sep = ', ' if inner.strip() else ''
+                return f'requires = [{inner}{sep}"setuptools_scm[toml]>=6.2"]'
+            content = re.sub(r'requires\s*=\s*\[([^\]]*)\]', add_scm_to_requires, content, count=1)
         else:
             content += '\n' + SCM_BUILD_SYSTEM
         changed = True
 
-    if 'dynamic' not in content:
-        content = content.replace('[project]', '[project]\ndynamic = ["version"]', 1)
+    # Remove hardcoded version = "x.y.z" from [project]
+    project = data.get('project', {})
+    if 'version' in project and 'version' not in project.get('dynamic', []):
+        content = re.sub(r'(?m)^\s*version\s*=\s*["\'][\d.][^"\']*["\'][ \t]*\n', '', content, count=1)
+        print(f"Removed hardcoded version = \"{project['version']}\" from [project]")
         changed = True
 
-    if '[tool.setuptools_scm]' not in content:
+    # Add "version" to dynamic
+    dynamic = project.get('dynamic', [])
+    if 'version' not in dynamic:
+        if 'dynamic' in content:
+            def add_version_to_dynamic(m):
+                inner = m.group(1).rstrip()
+                sep = ', ' if inner.strip() else ''
+                return f'dynamic = [{inner}{sep}"version"]'
+            content = re.sub(r'dynamic\s*=\s*\[([^\]]*)\]', add_version_to_dynamic, content, count=1)
+        else:
+            content = content.replace('[project]', '[project]\ndynamic = ["version"]', 1)
+        changed = True
+
+    # Add [tool.setuptools_scm] section
+    if 'setuptools_scm' not in data.get('tool', {}):
         content += '\n' + SCM_TOOL_CONFIG
         changed = True
 
@@ -205,6 +225,24 @@ def init_pyproject():
         print("Updated pyproject.toml with setuptools_scm configuration")
     else:
         print("pyproject.toml already has setuptools_scm configuration")
+
+    # Hint about __version__ in source files
+    version_in_src = []
+    for root, dirs, files in os.walk('.'):
+        dirs[:] = [d for d in dirs if d not in {'.git', '__pycache__', 'dist', 'build'}]
+        for fname in files:
+            if fname.endswith('.py'):
+                fpath = os.path.join(root, fname)
+                with open(fpath) as f:
+                    if re.search(r'^\s*__version__\s*=\s*["\'][\d.]+["\']', f.read(), re.MULTILINE):
+                        version_in_src.append(fpath)
+    if version_in_src:
+        print("\nNote: hardcoded __version__ found in:")
+        for p in version_in_src:
+            print(f"  {p}")
+        print("Consider replacing with:")
+        print("  from importlib.metadata import version")
+        print('  __version__ = version("<package-name>")')
 
 def check_publish_environment():
     """Check that the environment is ready for publishing"""
